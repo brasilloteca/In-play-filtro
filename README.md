@@ -1,1 +1,292 @@
 # In-play-filtro
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Filtro In-Play — Protótipo</title>
+<style>
+  :root{--bg:#0f1724;--card:#111827;--accent:#14b8a6;--muted:#94a3b8;--danger:#ff6b6b}
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:#e6eef8;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:14px auto;padding:14px}
+  .card{background:linear-gradient(180deg,#0b1220,#07111a);padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+  h1{margin:0 0 8px;font-size:18px;color:var(--accent)}
+  label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
+  input, select, textarea{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#eaf4ff;font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .btn{display:inline-block;margin-top:10px;padding:10px 12px;border-radius:10px;border:0;cursor:pointer;font-weight:700;background:var(--accent);color:#022}
+  .secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:#cfe7ff}
+  .output{margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02)}
+  .muted{color:var(--muted);font-size:13px}
+  .row{display:flex;gap:8px}
+  @media (max-width:780px){ .grid{grid-template-columns:1fr} .row{flex-direction:column} }
+  .badge{display:inline-block;padding:6px 8px;border-radius:8px;font-weight:800}
+  .high{background:rgba(20,184,166,0.12);color:#74f2df;border:1px solid rgba(20,184,166,0.18)}
+  .mid{background:rgba(255,176,32,0.08);color:#ffd28a;border:1px solid rgba(255,176,32,0.12)}
+  .low{background:rgba(255,82,82,0.08);color:#ffb3b3;border:1px solid rgba(255,82,82,0.12)}
+  .small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Filtro In-Play — Protótipo</h1>
+      <div class="muted">Preencha os dados ao vivo e clique em <strong>Aplicar Filtro In-Play</strong>.</div>
+
+      <label style="margin-top:12px">Jogo (Mandante x Visitante)</label>
+      <input id="game" placeholder="Ex: Palmeiras x Santos" value="Palmeiras x Santos">
+
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label>Odd Abertura - Mandante</label>
+          <input id="openHome" type="number" step="0.01" value="1.40">
+        </div>
+        <div>
+          <label>Odd Atual - Mandante</label>
+          <input id="curHome" type="number" step="0.01" value="1.48">
+        </div>
+        <div>
+          <label>Odd Atual - Empate</label>
+          <input id="curDraw" type="number" step="0.01" value="4.20">
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label>Odd Abertura - Empate</label>
+          <input id="openDraw" type="number" step="0.01" value="4.50">
+        </div>
+        <div>
+          <label>Odd Abertura - Visitante</label>
+          <input id="openAway" type="number" step="0.01" value="8.00">
+        </div>
+        <div>
+          <label>Odd Atual - Visitante</label>
+          <input id="curAway" type="number" step="0.01" value="7.00">
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label>Minuto</label>
+          <input id="minute" type="number" value="62">
+        </div>
+        <div>
+          <label>Placar (ex: 1-0)</label>
+          <input id="score" value="1-0">
+        </div>
+        <div>
+          <label>Posse Mandante (%)</label>
+          <input id="possession" type="number" value="65">
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label>Finalizações no alvo (mand.)</label>
+          <input id="shotsHome" type="number" value="6">
+        </div>
+        <div>
+          <label>Finalizações no alvo (vis.)</label>
+          <input id="shotsAway" type="number" value="1">
+        </div>
+        <div>
+          <label>xG (mand. - vis.)</label>
+          <input id="xg" value="1.45-0.20">
+        </div>
+      </div>
+
+      <label style="margin-top:10px">Cartões / Substituições / Observações</label>
+      <textarea id="notes" rows="2" placeholder="Ex: Santos 1 amarelo; substituição zagueiro 30'">Santos: zagueiro substituído 30'</textarea>
+
+      <label style="margin-top:8px">Desfalques / Reforços (breve)</label>
+      <input id="lineupNotes" placeholder="Ex: 2 desfalques no time visitante">
+
+      <div class="row" style="margin-top:12px">
+        <button class="btn" onclick="applyInPlay()">Aplicar Filtro In-Play</button>
+        <button class="btn secondary" onclick="clearOutputs()">Limpar</button>
+      </div>
+
+      <div id="result" class="output" style="display:none"></div>
+    </div>
+  </div>
+
+<script>
+/* Helpers */
+function impliedProb(odd){ return odd>0? 1/odd : 0; }
+function pct(v){ return (v*100).toFixed(1) + '%'; }
+function toFixed1(v){ return (v).toFixed(1); }
+
+/* Core in-play logic */
+function applyInPlay(){
+  // read inputs
+  const game = document.getElementById('game').value || '';
+  const openHome = parseFloat(document.getElementById('openHome').value) || 0;
+  const curHome  = parseFloat(document.getElementById('curHome').value) || 0;
+  const openDraw = parseFloat(document.getElementById('openDraw').value) || 0;
+  const curDraw  = parseFloat(document.getElementById('curDraw').value) || 0;
+  const openAway = parseFloat(document.getElementById('openAway').value) || 0;
+  const curAway  = parseFloat(document.getElementById('curAway').value) || 0;
+
+  const minute = parseInt(document.getElementById('minute').value || '0', 10);
+  const score = document.getElementById('score').value || '0-0';
+  const [homeGoals, awayGoals] = score.split('-').map(s=>parseInt(s.trim()||'0',10));
+  const possession = parseFloat(document.getElementById('possession').value || '50');
+  const shotsHome = parseInt(document.getElementById('shotsHome').value || '0',10);
+  const shotsAway = parseInt(document.getElementById('shotsAway').value || '0',10);
+  const xgRaw = document.getElementById('xg').value || '0-0';
+  const notes = document.getElementById('notes').value || '';
+  const lineupNotes = document.getElementById('lineupNotes').value || '';
+
+  // Validate odds
+  if(!openHome||!curHome||!openAway||!curAway||!openDraw||!curDraw){
+    alert('Preencha todas as odds (abertura e atual).');
+    return;
+  }
+
+  // --- 1) Probabilidades implícitas (atual), normalizadas (removendo overround) ---
+  const ipCurHome = impliedProb(curHome);
+  const ipCurDraw = impliedProb(curDraw);
+  const ipCurAway = impliedProb(curAway);
+  const sumCur = ipCurHome + ipCurDraw + ipCurAway;
+  const ipCurHome_n = ipCurHome / sumCur;
+  const ipCurDraw_n = ipCurDraw / sumCur;
+  const ipCurAway_n = ipCurAway / sumCur;
+
+  // --- 2) Trend (Tendência Real) calculation ---
+  // possessionDiff in [-1..1] favor home
+  const possessionDiff = ((possession) - (100 - possession)) / 100; // e.g. 0.3
+  // shotsDiff normalized to -1..1
+  const shotsTotal = Math.max(1, shotsHome + shotsAway);
+  const shotsDiff = (shotsHome - shotsAway) / shotsTotal;
+  // xG diff
+  const xgParts = xgRaw.split('-').map(s=>parseFloat(s.trim()||'0'));
+  const xgHome = xgParts[0] || 0;
+  const xgAway = xgParts[1] || 0;
+  const xgTotal = Math.max(0.1, xgHome + xgAway);
+  const xgDiff = (xgHome - xgAway) / xgTotal;
+
+  // Weighted trend value: tuned heuristics
+  // weights tuned: possession 0.45, shots 0.35, xG 0.20
+  const trendValue = 0.45 * possessionDiff + 0.35 * shotsDiff + 0.20 * xgDiff;
+  // Convert to trendScore 0..1 where 0.5 neutral
+  const trendScore = (trendValue + 1) / 2;
+
+  // --- 3) Market favorite probability (the market's top implied probability) ---
+  const marketFavProb = Math.max(ipCurHome_n, ipCurAway_n);
+
+  // --- 4) Discrepancy: how much trend >/< market (positive => trend > market) ---
+  const discrepancy = trendScore - marketFavProb; // range roughly -1..1 but typically small
+  const discrepancyPct = discrepancy * 100;
+
+  // --- 5) Interpret discrepancy and decide action ---
+  // thresholds:
+  // > +8% => trend stronger than market => VALUE on dominant team (enter)
+  // between -8% .. +8% => neutral (manter/evitar novas entradas)
+  // < -8% => market stronger than trend => caution/hedge
+  let interpretation = 'Neutro';
+  let action = 'Manter / Evitar novas entradas';
+  if(discrepancy > 0.08) { interpretation = 'Tendência real > Mercado (valor no time dominante)'; action = 'Entrar a favor do time dominante (valor detectado)'; }
+  else if(discrepancy < -0.08) { interpretation = 'Tendência real < Mercado (mercado sobreestima favorito)'; action = 'Hedge parcial ou considerar cash-out — risco aumentado'; }
+
+  // refine using minute and score (game state rules)
+  if(minute >= 60 && (homeGoals - awayGoals) >= 2){
+    action = 'Evitar novas entradas; considerar hedge parcial para travar lucro';
+    interpretation += ' • Jogo com vantagem confortável no tempo final.';
+  }
+
+  if(minute <= 20 && (homeGoals - awayGoals) === 0 && Math.abs(discrepancy) < 0.08){
+    // early game, small sample -> be conservative
+    action = 'Evitar entradas significativas (amostra pequena)';
+  }
+
+  // --- 6) Hedge suggestion (percent of stake to hedge) ---
+  // simplistic rule-of-thumb:
+  let hedgeSuggestion = 'Nenhum hedge necessário';
+  if(discrepancy < -0.15) hedgeSuggestion = 'Considerar hedge forte (50% da stake) — mercado muito acima da tendência';
+  else if(discrepancy < -0.08) hedgeSuggestion = 'Considerar hedge parcial (25-35% da stake)';
+  else if(discrepancy > 0.12) hedgeSuggestion = 'Valor alto no dominante — pode abrir posição (pequena a média stake)';
+  else if(discrepancy > 0.08) hedgeSuggestion = 'Valor detectado — entrar com stake reduzida ou média';
+
+  // --- 7) Quick suggested markets based on situation ---
+  const favIsHome = ipCurHome_n > ipCurAway_n;
+  const favName = favIsHome ? 'Mandante' : 'Visitante';
+  let suggestedMarkets = [];
+  if(action.startsWith('Entrar')) {
+    suggestedMarkets.push('Next Goal (próximo gol) a favor do dominante');
+    suggestedMarkets.push('Asian Handicap -0.5 (favorito)');
+  } else if(action.includes('Hedge') || action.includes('cash-out')) {
+    suggestedMarkets.push('Dupla Chance (favorito/empate) para reduzir risco');
+    suggestedMarkets.push('Aposta pequena no empate ou no adversário para travar perda');
+  } else {
+    suggestedMarkets.push('Aguardar; evitar entradas maiores');
+  }
+  // if many shots and high xG, suggest BTTS/Over
+  if((shotsHome + shotsAway) >= 8 || (xgHome + xgAway) >= 1.8) suggestedMarkets.push('Mercados Over 1.5 / BTTS possivelmente válidos');
+
+  // --- 8) Confiabilidade rápida (score 0-100) ---
+  // start base on marketFavProb (higher market fav prob -> bigger confidence normally)
+  let confidence = Math.round(50 + (marketFavProb - 0.5) * 50); // base mapping
+  // adjust by trend alignment
+  if(Math.abs(discrepancy) <= 0.05) confidence += 10;
+  if(discrepancy > 0.08) confidence += 8;
+  if(discrepancy < -0.08) confidence -= 12;
+  // penalty for lineup notes / desfalques mentions
+  if(/desfal|ausen|lesa|suspend/i.test(lineupNotes)) confidence -= 10;
+  if(confidence > 100) confidence = 100;
+  if(confidence < 0) confidence = 0;
+
+  // --- 9) Build result HTML ---
+  const out = document.getElementById('result');
+  out.style.display = 'block';
+  out.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <strong>${game}</strong><div class="small">Minuto: ${minute} — Placar: ${homeGoals}-${awayGoals}</div>
+      </div>
+      <div style="text-align:right">
+        <span class="badge ${confidence>=75?'high':confidence>=50?'mid':'low'}">${confidence}%</span>
+        <div class="small">Confiabilidade</div>
+      </div>
+    </div>
+
+    <hr style="margin:10px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div class="small">Probabilidades implícitas (normalizadas)</div>
+        <div style="font-weight:800;margin-top:6px">
+          Mandante: ${pct(ipCurHome_n)} • Empate: ${pct(ipCurDraw_n)} • Visitante: ${pct(ipCurAway_n)}
+        </div>
+        <div class="small" style="margin-top:6px">Odds atuais (1X2): ${curHome.toFixed(2)} / ${curDraw.toFixed(2)} / ${curAway.toFixed(2)}</div>
+      </div>
+
+      <div style="flex:1;min-width:200px">
+        <div class="small">Trend score (0-1)</div>
+        <div style="font-weight:800;margin-top:6px">${trendScore.toFixed(2)} (${(trendValue>=0?'+':'')+ (trendValue.toFixed(2))})</div>
+        <div class="small" style="margin-top:6px">Market fav prob: ${pct(marketFavProb)}</div>
+      </div>
+    </div>
+
+    <div style="margin-top:10px" class="small">
+      <strong>Discrepância (Trend - Market):</strong> ${discrepancyPct.toFixed(2)} p.p. (${discrepancy>0? 'Trend mais forte' : discrepancy<0? 'Mercado mais forte' : 'Alinhados'})<br>
+      <strong>Interpretação:</strong> ${interpretation}<br>
+      <strong>Ação recomendada:</strong> ${action}<br>
+      <strong>Sugestão de hedge:</strong> ${hedgeSuggestion}<br>
+      <strong>Mercados sugeridos:</strong> ${suggestedMarkets.join(' • ')}<br>
+      <strong>Justificativa:</strong> posse ${possession}%, finalizações ${shotsHome}-${shotsAway}, xG ${xgHome.toFixed(2)}-${xgAway.toFixed(2)}, notas: ${notes || '-'} ${lineupNotes? ' / ' + lineupNotes : ''}
+    </div>
+  `;
+
+  // scroll to result on small screens
+  out.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+/* Clear outputs */
+function clearOutputs(){
+  document.getElementById('result').style.display='none';
+  // optionally reset fields? keep user inputs
+}
+</script>
+</body>
+</html>
